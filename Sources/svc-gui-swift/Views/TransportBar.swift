@@ -46,6 +46,17 @@ struct TransportBar: View {
 
     private var playbackSection: some View {
         VStack(spacing: 6) {
+            // File name
+            if let name = appState.playingFileName {
+                Text(name)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.gray.opacity(0.7))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            } else {
+                Color.clear.frame(height: 12)
+            }
+
             // Progress bar + time
             VStack(spacing: 2) {
                 SeekBarView(

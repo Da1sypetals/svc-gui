@@ -28,11 +28,12 @@ class AppState: ObservableObject {
     @Published var currentPlaybackTime: Double = 0
     @Published var playbackDuration: Double = 0
     @Published var meterLevel: CGFloat = 0
+    @Published var playingFileName: String? = nil
 
     // MARK: - FFI
     private var ffi: YingmusicFFI?
 
-    let diffusionStepValues = [1, 2, 4, 8, 16, 24, 32, 48, 64]
+    static let diffusionStepValues = [1, 2, 4, 8, 16, 24, 32, 48, 64]
 
     init() {
         reloadAllFiles()
@@ -47,15 +48,15 @@ class AppState: ObservableObject {
     // MARK: - Import
 
     func importRecording(from url: URL) {
-        guard let file = storage.importRecording(from: url) else { return }
-        recordings.append(file)
+        guard storage.importRecording(from: url) != nil else { return }
+        recordings = storage.listRecordings()
     }
 
     func importTimbre(from url: URL) {
-        guard let file = storage.importTimbre(from: url) else { return }
-        timbres.insert(file, at: 0)
-        if selectedTimbreID == nil {
-            selectedTimbreID = file.id
+        guard storage.importTimbre(from: url) != nil else { return }
+        timbres = storage.listTimbres()
+        if selectedTimbreID == nil, let last = timbres.last {
+            selectedTimbreID = last.id
         }
     }
 
@@ -76,8 +77,8 @@ class AppState: ObservableObject {
             isRecording = false
             return
         }
-        let file = storage.addRecording(from: tempURL)
-        recordings.append(file)
+        _ = storage.addRecording(from: tempURL)
+        recordings = storage.listRecordings()
         isRecording = false
         meterLevel = 0
     }
@@ -100,10 +101,12 @@ class AppState: ObservableObject {
             ended: { [weak self] in
                 DispatchQueue.main.async {
                     self?.isPlaying = false
+                    self?.playingFileName = nil
                 }
             }
         )
         isPlaying = true
+        playingFileName = file.name
     }
 
     func togglePlayPause() {
@@ -191,8 +194,7 @@ class AppState: ObservableObject {
             DispatchQueue.main.async {
                 self.isGenerating = false
                 if success {
-                    let output = AudioFile(url: URL(fileURLWithPath: outputPath), name: outputName)
-                    self.outputs.insert(output, at: 0)
+                    self.outputs = self.storage.listOutputs()
                 } else {
                     self.generationError = "生成失败，请查看日志"
                 }

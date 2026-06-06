@@ -147,7 +147,7 @@ struct ControlPanelView: View {
 
 struct DiffusionStepSlider: View {
     @Binding var value: Int
-    let steps = AppState().diffusionStepValues
+    private let steps = AppState.diffusionStepValues
 
     var body: some View {
         GeometryReader { geometry in
@@ -168,7 +168,7 @@ struct DiffusionStepSlider: View {
                 // Tick marks
                 ForEach(Array(steps.enumerated()), id: \.offset) { i, step in
                     Circle()
-                        .fill(i <= (steps.firstIndex(of: value) ?? 0) ? Color.blue : Color.gray.opacity(0.5))
+                        .fill(i <= steps.firstIndex(of: value)! ? Color.blue : Color.gray.opacity(0.5))
                         .frame(width: 10, height: 10)
                         .position(x: stepWidth * CGFloat(i), y: geometry.size.height / 2)
                         .onTapGesture { value = step }

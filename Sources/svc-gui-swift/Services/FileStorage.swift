@@ -34,9 +34,7 @@ final class FileStorage {
     }
 
     func listOutputs() -> [AudioFile] {
-        listFiles(in: outputsDir).sorted { a, b in
-            a.name < b.name
-        }
+        listFiles(in: outputsDir)
     }
 
     private let audioExtensions = Set(["wav", "m4a", "mp3", "aac", "aiff", "aif", "caf", "flac"])
@@ -44,7 +42,7 @@ final class FileStorage {
     private func listFiles(in dir: URL) -> [AudioFile] {
         guard let contents = try? FileManager.default.contentsOfDirectory(
             at: dir,
-            includingPropertiesForKeys: nil
+            includingPropertiesForKeys: [.attributeModificationDateKey]
         ) else { return [] }
         var files: [AudioFile] = []
         for url in contents {
@@ -53,9 +51,13 @@ final class FileStorage {
             files.append(AudioFile(url: url, name: name))
         }
         files.sort { a, b in
-            let da = (try? a.url.resourceValues(forKeys: [.creationDateKey]))?.creationDate ?? Date.distantPast
-            let db = (try? b.url.resourceValues(forKeys: [.creationDateKey]))?.creationDate ?? Date.distantPast
-            return da < db
+            let da = (try? a.url.resourceValues(forKeys: [.attributeModificationDateKey]))?.attributeModificationDate
+            let db = (try? b.url.resourceValues(forKeys: [.attributeModificationDateKey]))?.attributeModificationDate
+            switch (da, db) {
+            case let (a?, b?): return a < b
+            case (nil, _):     return false
+            case (_, nil):     return true
+            }
         }
         return files
     }

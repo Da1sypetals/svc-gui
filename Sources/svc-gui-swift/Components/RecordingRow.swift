@@ -45,10 +45,14 @@ struct RecordingRow: View {
             Button("播放") { onPlay() }
             Button("重命名") { onRenameStart() }
             Divider()
+            Button("在 Finder 中显示") {
+                NSWorkspace.shared.activateFileViewerSelecting([file.url])
+            }
+            Divider()
             Button("删除", role: .destructive) { onDelete() }
         }
         .onDrag {
-            NSItemProvider(contentsOf: file.url) ?? NSItemProvider(object: file.name as NSString)
+            NSItemProvider(contentsOf: file.url) ?? NSItemProvider()
         }
     }
 }
