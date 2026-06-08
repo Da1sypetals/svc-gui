@@ -8,9 +8,12 @@ final class YingmusicFFI {
     private typealias DestroyFunc = @convention(c) (UnsafeMutableRawPointer?) -> Void
     private typealias InferFunc = @convention(c) (UnsafeMutableRawPointer?, UnsafePointer<CChar>, UnsafePointer<CChar>, Int32, Float, UnsafePointer<CChar>) -> Int32
 
+    private typealias CancelFunc = @convention(c) (UnsafeMutableRawPointer?) -> Void
+
     private let createFn: CreateFunc
     private let destroyFn: DestroyFunc
     private let inferFn: InferFunc
+    private let cancelFn: CancelFunc
 
     init?(configPath: String) {
         let bundleDir = Bundle.main.bundlePath
@@ -32,7 +35,8 @@ final class YingmusicFFI {
 
         guard let createPtr = dlsym(lib, "yingmusic_create"),
               let destroyPtr = dlsym(lib, "yingmusic_destroy"),
-              let inferPtr = dlsym(lib, "yingmusic_infer")
+              let inferPtr = dlsym(lib, "yingmusic_infer"),
+              let cancelPtr = dlsym(lib, "yingmusic_cancel")
         else {
             dlclose(lib)
             return nil
@@ -45,6 +49,7 @@ final class YingmusicFFI {
         self.createFn = createFn
         self.destroyFn = destroyFn
         self.inferFn = inferFn
+        self.cancelFn = unsafeBitCast(cancelPtr, to: CancelFunc.self)
 
         let h = configPath.withCString { createFn($0) }
         guard let h else {
@@ -52,6 +57,10 @@ final class YingmusicFFI {
             return nil
         }
         handle = h
+    }
+
+    func cancel() {
+        cancelFn(handle)
     }
 
     func infer(source: String, target: String, steps: Int, pitch: Float, output: String) -> Bool {

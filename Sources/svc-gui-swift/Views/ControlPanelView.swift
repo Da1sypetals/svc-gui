@@ -77,23 +77,24 @@ struct ControlPanelView: View {
                 }
             }
 
-            // Generate button
-            Button(action: { appState.generate() }) {
-                if appState.isGenerating {
+            // Generate / Cancel button
+            if appState.isGenerating {
+                Button(action: { appState.cancelGeneration() }) {
                     HStack {
-                        ProgressView()
-                            .scaleEffect(0.7)
-                        Text("生成中...")
-                    }
-                    .frame(maxWidth: .infinity)
-                } else {
-                    Text("生成")
-                        .frame(maxWidth: .infinity)
+                        ProgressView().scaleEffect(0.7)
+                        Text("取消")
+                    }.frame(maxWidth: .infinity)
                 }
+                .buttonStyle(.bordered)
+                .padding(.top, 8)
+            } else {
+                Button(action: { appState.generate() }) {
+                    Text("生成").frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!canGenerate)
+                .padding(.top, 8)
             }
-            .buttonStyle(.borderedProminent)
-            .disabled(appState.isGenerating || !canGenerate)
-            .padding(.top, 8)
 
             if let error = appState.generationError {
                 Text(error)
@@ -102,6 +103,26 @@ struct ControlPanelView: View {
             }
 
             Spacer()
+
+            // Log output
+            if !appState.logs.isEmpty {
+                ScrollViewReader { scroll in
+                    ScrollView {
+                        Text(appState.logs)
+                            .font(.system(size: 9, design: .monospaced))
+                            .foregroundColor(.gray.opacity(0.8))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(4)
+                            .id("bottom")
+                    }
+                    .frame(height: 60)
+                    .background(Color.black.opacity(0.3))
+                    .cornerRadius(4)
+                    .onChange(of: appState.logs) { _ in
+                        scroll.scrollTo("bottom", anchor: .bottom)
+                    }
+                }
+            }
         }
         .padding(.horizontal, 16)
         .alert("文件校验失败", isPresented: .constant(errorMessage != nil)) {
@@ -112,7 +133,7 @@ struct ControlPanelView: View {
     }
 
     private var canGenerate: Bool {
-        appState.selectedRecordingID != nil && appState.selectedTimbreID != nil
+        !appState.isGenerating && appState.selectedRecordingID != nil && appState.selectedTimbreID != nil
     }
 
     private func importTimbre() {

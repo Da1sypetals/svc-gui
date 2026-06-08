@@ -20,6 +20,9 @@ class AppState: ObservableObject {
     // MARK: - Generation
     @Published var isGenerating = false
     @Published var generationError: String?
+    @Published var logs: String = ""
+    private var cancelGenerationFlag = false
+    private var generationInProgress = false
 
     // MARK: - Audio playback / recording
     private let audioManager = AudioManager()
@@ -162,6 +165,8 @@ class AppState: ObservableObject {
 
         isGenerating = true
         generationError = nil
+        cancelGenerationFlag = false
+        generationInProgress = true
 
         if ffi == nil {
             guard let configPath = Bundle.main.path(forResource: "yingmusic-svc", ofType: "toml")
@@ -183,6 +188,14 @@ class AppState: ObservableObject {
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self, let ffi = self.ffi else { return }
+
+            let pipe = LogPipe { text in
+                DispatchQueue.main.async {
+                    self.logs.append(text)
+                }
+            }
+            let saved = pipe.redirect()
+
             let success = ffi.infer(
                 source: recording.url.path,
                 target: timbre.url.path,
@@ -191,8 +204,17 @@ class AppState: ObservableObject {
                 output: outputPath
             )
 
+            pipe.restore(saved: saved)
+
             DispatchQueue.main.async {
+                if self.cancelGenerationFlag {
+                    try? FileManager.default.removeItem(atPath: outputPath)
+                    self.isGenerating = false
+                    self.generationInProgress = false
+                    return
+                }
                 self.isGenerating = false
+                self.generationInProgress = false
                 if success {
                     self.outputs = self.storage.listOutputs()
                 } else {
@@ -200,6 +222,11 @@ class AppState: ObservableObject {
                 }
             }
         }
+    }
+
+    func cancelGeneration() {
+        ffi?.cancel()
+        cancelGenerationFlag = true
     }
 
     private func findConfigPath() -> String? {
