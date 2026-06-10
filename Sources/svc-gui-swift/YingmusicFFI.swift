@@ -17,7 +17,7 @@ final class YingmusicFFI {
 
     init?(configPath: String) {
         let bundleDir = Bundle.main.bundlePath
-        let dylibName = "libyingmusic_rust.dylib"
+        let dylibName = "libyingmusic.dylib"
         let dylibPaths = [
             URL(fileURLWithPath: bundleDir).appendingPathComponent(dylibName).path,
             URL(fileURLWithPath: bundleDir).appendingPathComponent("Contents/MacOS").appendingPathComponent(dylibName).path,
@@ -25,7 +25,7 @@ final class YingmusicFFI {
             NSHomeDirectory() + "/.svc-gui/" + dylibName,
         ]
         guard let dylibPath = dylibPaths.first(where: { FileManager.default.fileExists(atPath: $0) }) else {
-            fatalError("Cannot find libyingmusic_rust.dylib")
+            fatalError("Cannot find \(dylibName)")
         }
 
         guard let lib = dlopen(dylibPath, RTLD_NOW) else {

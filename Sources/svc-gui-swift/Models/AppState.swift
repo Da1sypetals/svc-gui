@@ -13,9 +13,19 @@ class AppState: ObservableObject {
     @Published var selectedRecordingID: String?
     @Published var selectedTimbreID: String?
 
+    // MARK: - Algorithm
+    @Published var selectedAlgorithm: SVCAlgorithm = .rvc
+    @Published var rvcModels: [RvcModelInfo] = []
+    @Published var selectedRvcModelID: String?
+
     // MARK: - Parameters
     @Published var diffusionSteps: Int = 16
-    @Published var pitchShift: Int = 12
+    @Published var pitchShift: Int = 9
+    @Published var rvcIndexRate: Float = 0.3
+    @Published var rvcVolumeEnvelope: Float = 1.0
+    @Published var rvcProtect: Float = 0.33
+    @Published var rvcF0Autotune: Bool = false
+    @Published var rvcF0AutotuneStrength: Float = 1.0
 
     // MARK: - Generation
     @Published var isGenerating = false
@@ -35,17 +45,43 @@ class AppState: ObservableObject {
 
     // MARK: - FFI
     private var ffi: YingmusicFFI?
+    private var rvcFFI: RvcFFI?
 
     static let diffusionStepValues = [1, 2, 4, 8, 16, 24, 32, 48, 64]
 
     init() {
         reloadAllFiles()
+        scanRvcModels()
     }
 
     func reloadAllFiles() {
         recordings = storage.listRecordings()
         timbres = storage.listTimbres()
         outputs = storage.listOutputs()
+    }
+
+    func scanRvcModels() {
+        let baseDir = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".svc-gui/rvc/models")
+        guard let contents = try? FileManager.default.contentsOfDirectory(at: baseDir, includingPropertiesForKeys: nil)
+        else { return }
+        var models: [RvcModelInfo] = []
+        for dir in contents where dir.hasDirectoryPath {
+            let safetensors = dir.appendingPathComponent("model.safetensors")
+            guard FileManager.default.fileExists(atPath: safetensors.path) else { continue }
+            let index = dir.appendingPathComponent("model.index")
+            let idxPath = FileManager.default.fileExists(atPath: index.path) ? index.path : nil
+            models.append(RvcModelInfo(
+                id: dir.lastPathComponent,
+                name: dir.lastPathComponent,
+                modelPath: safetensors.path,
+                indexPath: idxPath
+            ))
+        }
+        rvcModels = models
+        if selectedRvcModelID == nil || !rvcModels.contains(where: { $0.id == selectedRvcModelID }) {
+            selectedRvcModelID = rvcModels.first?.id
+        }
     }
 
     // MARK: - Import
@@ -154,6 +190,13 @@ class AppState: ObservableObject {
     // MARK: - Generate
 
     func generate() {
+        switch selectedAlgorithm {
+        case .yingmusic: generateYingMusic()
+        case .rvc: generateRvc()
+        }
+    }
+
+    func generateYingMusic() {
         guard let recID = selectedRecordingID,
               let recording = recordings.first(where: { $0.id == recID }),
               let timbreID = selectedTimbreID,
@@ -224,8 +267,78 @@ class AppState: ObservableObject {
         }
     }
 
+    func generateRvc() {
+        guard let recID = selectedRecordingID,
+              let recording = recordings.first(where: { $0.id == recID }),
+              let modelID = selectedRvcModelID,
+              let model = rvcModels.first(where: { $0.id == modelID })
+        else {
+            generationError = "请先选择音源和模型"
+            return
+        }
+
+        isGenerating = true
+        generationError = nil
+        cancelGenerationFlag = false
+        generationInProgress = true
+
+        if rvcFFI == nil {
+            let commonDir = NSHomeDirectory() + "/.svc-gui/rvc/common/"
+            let hubertPath = commonDir + "hubert.safetensors"
+            let rmvpePath = commonDir + "rmvpe.safetensors"
+            rvcFFI = RvcFFI(modelPath: model.modelPath, hubertPath: hubertPath, rmvpePath: rmvpePath)
+        }
+
+        let outputName = storage.generateOutputName(
+            timbreName: model.name,
+            steps: 0,
+            pitch: pitchShift
+        )
+        let outputPath = storage.outputURL(for: outputName).path
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self, let rvc = self.rvcFFI else { return }
+
+            let pipe = LogPipe { text in
+                DispatchQueue.main.async { self.logs.append(text) }
+            }
+            let saved = pipe.redirect()
+
+            let success = rvc.infer(
+                input: recording.url.path,
+                output: outputPath,
+                pitch: self.pitchShift,
+                indexPath: model.indexPath,
+                indexRate: self.rvcIndexRate,
+                volume: self.rvcVolumeEnvelope,
+                protect: self.rvcProtect,
+                f0Autotune: self.rvcF0Autotune,
+                f0AutotuneStrength: self.rvcF0AutotuneStrength
+            )
+
+            pipe.restore(saved: saved)
+
+            DispatchQueue.main.async {
+                if self.cancelGenerationFlag {
+                    try? FileManager.default.removeItem(atPath: outputPath)
+                    self.isGenerating = false
+                    self.generationInProgress = false
+                    return
+                }
+                self.isGenerating = false
+                self.generationInProgress = false
+                if success {
+                    self.outputs = self.storage.listOutputs()
+                } else {
+                    self.generationError = "生成失败，请查看日志"
+                }
+            }
+        }
+    }
+
     func cancelGeneration() {
         ffi?.cancel()
+        rvcFFI?.cancel()
         cancelGenerationFlag = true
     }
 
