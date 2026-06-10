@@ -151,7 +151,13 @@ struct ControlPanelView: View {
             EditableSliderRow(label: "Index Rate", value: $appState.rvcIndexRate, range: 0...1, format: "%.2f")
             EditableSliderRow(label: "Volume", value: $appState.rvcVolumeEnvelope, range: 0...2, format: "%.1f")
             EditableSliderRow(label: "Protect", value: $appState.rvcProtect, range: 0...1, format: "%.2f")
-            Toggle("F0 Autotune", isOn: $appState.rvcF0Autotune).font(.caption)
+            HStack {
+                Toggle("F0 Autotune", isOn: $appState.rvcF0Autotune).font(.caption)
+                Spacer()
+                Button("重置默认") { appState.resetRvcDefaults() }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+            }
             if appState.rvcF0Autotune {
                 EditableSliderRow(label: "Autotune Strength", value: $appState.rvcF0AutotuneStrength, range: 0...1, format: "%.2f")
             }

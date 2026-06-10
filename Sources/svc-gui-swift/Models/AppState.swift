@@ -342,6 +342,14 @@ class AppState: ObservableObject {
         cancelGenerationFlag = true
     }
 
+    func resetRvcDefaults() {
+        rvcIndexRate = 0.3
+        rvcVolumeEnvelope = 1.0
+        rvcProtect = 0.33
+        rvcF0Autotune = false
+        rvcF0AutotuneStrength = 1.0
+    }
+
     private func findConfigPath() -> String? {
         let candidates = [
             NSHomeDirectory() + "/.svc-gui/yingmusic-svc.toml",
