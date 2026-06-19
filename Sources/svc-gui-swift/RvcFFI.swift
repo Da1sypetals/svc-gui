@@ -4,7 +4,7 @@ final class RvcFFI {
     private let handle: UnsafeMutableRawPointer
     private let libHandle: UnsafeMutableRawPointer
 
-    private typealias CreateFunc = @convention(c) (UnsafePointer<CChar>, UnsafePointer<CChar>, UnsafePointer<CChar>) -> UnsafeMutableRawPointer?
+    private typealias CreateFunc = @convention(c) (UnsafePointer<CChar>, UnsafePointer<CChar>, UnsafePointer<CChar>, UnsafePointer<CChar>) -> UnsafeMutableRawPointer?
     private typealias DestroyFunc = @convention(c) (UnsafeMutableRawPointer?) -> Void
     private typealias CancelFunc = @convention(c) (UnsafeMutableRawPointer?) -> Void
     private typealias InferFunc = @convention(c) (UnsafeMutableRawPointer?, UnsafePointer<CChar>, UnsafePointer<CChar>, Int32, UnsafePointer<CChar>, Float, Float, Float, Int32, Float) -> Int32
@@ -14,7 +14,7 @@ final class RvcFFI {
     private let cancelFn: CancelFunc
     private let inferFn: InferFunc
 
-    init?(modelPath: String, hubertPath: String, rmvpePath: String) {
+    init?(modelPath: String, hubertPath: String, rmvpePath: String, indexPath: String?) {
         let dylibName = "librvc.dylib"
         let bundleDir = Bundle.main.bundlePath
         let dylibPaths = [
@@ -49,10 +49,13 @@ final class RvcFFI {
         self.cancelFn = cancelFn
         self.inferFn = inferFn
 
+        let index = indexPath ?? ""
         let handle = modelPath.withCString { m in
             hubertPath.withCString { h in
                 rmvpePath.withCString { r in
-                    createFn(m, h, r)
+                    index.withCString { i in
+                        createFn(m, h, r, i)
+                    }
                 }
             }
         }

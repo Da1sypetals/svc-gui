@@ -46,6 +46,7 @@ class AppState: ObservableObject {
     // MARK: - FFI
     private var ffi: YingmusicFFI?
     private var rvcFFI: RvcFFI?
+    private var loadedRvcModelID: String?
 
     static let diffusionStepValues = [1, 2, 4, 8, 16, 24, 32, 48, 64]
 
@@ -282,13 +283,6 @@ class AppState: ObservableObject {
         cancelGenerationFlag = false
         generationInProgress = true
 
-        if rvcFFI == nil {
-            let commonDir = NSHomeDirectory() + "/.svc-gui/rvc/common/"
-            let hubertPath = commonDir + "hubert.safetensors"
-            let rmvpePath = commonDir + "rmvpe.safetensors"
-            rvcFFI = RvcFFI(modelPath: model.modelPath, hubertPath: hubertPath, rmvpePath: rmvpePath)
-        }
-
         let outputName = storage.generateOutputName(
             timbreName: model.name,
             steps: 0,
@@ -297,12 +291,35 @@ class AppState: ObservableObject {
         let outputPath = storage.outputURL(for: outputName).path
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self, let rvc = self.rvcFFI else { return }
+            guard let self else { return }
 
             let pipe = LogPipe { text in
                 DispatchQueue.main.async { self.logs.append(text) }
             }
             let saved = pipe.redirect()
+
+            if self.rvcFFI == nil || self.loadedRvcModelID != model.id {
+                let commonDir = NSHomeDirectory() + "/.svc-gui/rvc/common/"
+                let hubertPath = commonDir + "hubert.safetensors"
+                let rmvpePath = commonDir + "rmvpe.safetensors"
+                self.rvcFFI = RvcFFI(
+                    modelPath: model.modelPath,
+                    hubertPath: hubertPath,
+                    rmvpePath: rmvpePath,
+                    indexPath: model.indexPath
+                )
+                self.loadedRvcModelID = self.rvcFFI == nil ? nil : model.id
+            }
+
+            guard let rvc = self.rvcFFI else {
+                pipe.restore(saved: saved)
+                DispatchQueue.main.async {
+                    self.isGenerating = false
+                    self.generationInProgress = false
+                    self.generationError = "RVC 模型加载失败，请查看日志"
+                }
+                return
+            }
 
             let success = rvc.infer(
                 input: recording.url.path,
